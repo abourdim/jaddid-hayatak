@@ -167,15 +167,17 @@
     const cards = [];
     const tabName = panel.id.replace('panel-', '');
 
-    // Section title + desc
-    const title = panel.querySelector('.section-title, .about-section-title');
-    const desc = panel.querySelector('.section-desc');
-    if (title) {
-      cards.push({
-        el: title.closest('.panel') || title,
-        text: (title.textContent || '') + '. ' + (desc ? desc.textContent : ''),
-        type: 'title'
-      });
+    // Section title + desc (not for about tab — about has its own structure)
+    if (tabName !== 'about') {
+      const title = panel.querySelector('.section-title');
+      const desc = panel.querySelector('.section-desc');
+      if (title) {
+        cards.push({
+          el: title.closest('.panel') || title,
+          text: (title.textContent || '') + '. ' + (desc ? desc.textContent : ''),
+          type: 'title'
+        });
+      }
     }
 
     // Different card types per tab
@@ -218,50 +220,102 @@
   }
 
   function cleanText(text) {
-    return text.replace(/\s+/g, ' ').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\u{2190}-\u{21FF}↑↓←→✓]/gu, '').trim();
+    var clean = text.replace(/\s+/g, ' ').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\u{2190}-\u{21FF}↑↓←→✓]/gu, '').trim();
+    // Pronunciation hints for French/English TTS
+    var l = getLang();
+    if (l === 'fr') {
+      clean = clean
+        .replace(/al-Ghazali/gi, 'al Razali')
+        .replace(/Ghazali/gi, 'Razali')
+        .replace(/Sheikh/gi, 'Cheikh')
+        .replace(/Mohammed/gi, 'Mohamèd')
+        .replace(/Carnegie/gi, 'Carnégi')
+        .replace(/Al-Azhar/gi, 'al Azar')
+        .replace(/Faisal/gi, 'Faycal')
+        .replace(/Nasih Ulwan/gi, 'Nassih Oulwane');
+    } else if (l === 'en') {
+      clean = clean
+        .replace(/al-Ghazali/gi, 'al Gah-zah-lee')
+        .replace(/Ghazali/gi, 'Gah-zah-lee');
+    }
+    return clean;
   }
 
   // ═══ SPEECH ENGINE ═══
-  let speakGen = 0; // generation counter to suppress stale callbacks
+  // Uses polling to detect speech end — onend is unreliable in Chrome
+  let speakGen = 0;
 
   function speak(text, onEnd) {
     speakGen++;
-    const myGen = speakGen;
+    var myGen = speakGen;
     speechSynthesis.cancel();
-    // Guard: empty text — skip to next
+
     if (!text || !text.trim()) {
       if (onEnd) onEnd();
       return;
     }
-    const l = getLang();
-    const utt = new SpeechSynthesisUtterance(text);
+
+    var l = getLang();
+    var utt = new SpeechSynthesisUtterance(text);
     utt.voice = getVoiceForLang(l);
     utt.lang = l === 'ar' ? 'ar-SA' : l === 'fr' ? 'fr-FR' : 'en-US';
     utt.rate = STATE.speed;
     utt.pitch = STATE.pitch;
 
-    // Karaoke: word boundary events
+    // Karaoke
     if (STATE.karaokeEnabled) {
       utt.onboundary = function(e) {
-        if (myGen !== speakGen) return; // stale
+        if (myGen !== speakGen) return;
         if (e.name === 'word' && e.charLength > 0 && STATE.cards[STATE.cardIndex]) {
           highlightWord(STATE.cards[STATE.cardIndex].el, e.charIndex, e.charLength, text);
         }
       };
     }
 
-    utt.onend = function() {
+    var done = false;
+    function finish() {
+      if (done) return;
+      done = true;
       clearHighlights();
-      if (myGen !== speakGen) return; // stale callback from cancelled utterance
+      if (myGen !== speakGen) return;
+      console.log('[Narrator] Card speech finished');
       if (onEnd) onEnd();
-    };
-    utt.onerror = function() {
-      clearHighlights();
-      if (myGen !== speakGen) return; // stale
-      if (onEnd) onEnd();
-    };
+    }
+
+    // Primary: onend callback
+    utt.onend = finish;
+    utt.onerror = finish;
 
     speechSynthesis.speak(utt);
+
+    // Secondary: poll every 500ms to detect when speech actually stops
+    // This catches all Chrome bugs where onend doesn't fire
+    var pollStarted = false;
+    var pollInterval = setInterval(function() {
+      if (done || myGen !== speakGen) { clearInterval(pollInterval); return; }
+      // Wait until speech has started before polling for end
+      if (speechSynthesis.speaking) { pollStarted = true; }
+      // Chrome pause bug: resume if paused unexpectedly
+      if (pollStarted && speechSynthesis.paused && !STATE.paused) {
+        speechSynthesis.resume();
+      }
+      // Detect end: was speaking, now stopped
+      if (pollStarted && !speechSynthesis.speaking && !speechSynthesis.pending) {
+        console.log('[Narrator] Poll detected speech end');
+        clearInterval(pollInterval);
+        finish();
+      }
+    }, 500);
+
+    // Hard fallback: max wait based on text length
+    var maxWait = Math.max(5000, (text.length / 3) * (1000 / STATE.speed)) + 3000;
+    setTimeout(function() {
+      if (!done && myGen === speakGen) {
+        console.log('[Narrator] Hard fallback after ' + maxWait + 'ms');
+        clearInterval(pollInterval);
+        finish();
+      }
+    }, maxWait);
   }
 
   // ═══ KARAOKE HIGHLIGHT ═══
@@ -355,10 +409,21 @@
       STATE.loopCurrent = 0;
     }
 
-    STATE.cardIndex++;
-    if (STATE.playing) {
-      setTimeout(function() { if (STATE.playing) readCurrentCard(); }, 500);
+    var justRead = STATE.cards[STATE.cardIndex];
+    var delay = 1200;
+    if (justRead) {
+      if (justRead.type === 'title') delay = 2500;
+      else if (justRead.text && justRead.text.length > 150) delay = 2000;
     }
+    STATE.cardIndex++;
+    if (!STATE.playing) return;
+    console.log('[Narrator] Card done: "' + (justRead ? justRead.type : '?') + '" — pausing ' + delay + 'ms before card ' + STATE.cardIndex);
+    // Remove highlight during pause for visual feedback
+    document.querySelectorAll('.narrator-active-card').forEach(function(e) { e.classList.remove('narrator-active-card'); });
+    setTimeout(function() {
+      console.log('[Narrator] Pause over, playing card ' + STATE.cardIndex);
+      if (STATE.playing) readCurrentCard();
+    }, delay);
   }
 
   function readDuoTranslation(card, onEnd) {
@@ -447,7 +512,7 @@
     closePanel();
     updateUI();
     setupMediaSession();
-    startChromeWorkaround();
+
     if (typeof showToast === 'function') showToast(nrT().page);
     readCurrentCard();
   }
@@ -460,7 +525,7 @@
     closePanel();
     updateUI();
     setupMediaSession();
-    startChromeWorkaround();
+
     if (typeof showToast === 'function') showToast(nrT().book);
     // Start from first tab
     switchToTab(STATE.tabOrder[0]);
@@ -499,7 +564,7 @@
     clearHighlights();
     document.querySelectorAll('.narrator-active-card').forEach(e => e.classList.remove('narrator-active-card'));
     if (STATE.sleepTimer) { clearTimeout(STATE.sleepTimer); STATE.sleepTimer = null; }
-    stopChromeWorkaround();
+
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
     updateUI();
   }
@@ -735,20 +800,7 @@
     STATE.duoReading = localStorage.getItem('jh-narrator-duo') === 'true';
   }
 
-  // ═══ CHROME RESUME WORKAROUND ═══
-  // Chrome pauses speechSynthesis after ~15s. This timer resumes it.
-  let chromeResumeInterval = null;
-  function startChromeWorkaround() {
-    stopChromeWorkaround();
-    chromeResumeInterval = setInterval(function() {
-      if (STATE.playing && !STATE.paused && speechSynthesis.speaking && speechSynthesis.paused) {
-        speechSynthesis.resume();
-      }
-    }, 5000);
-  }
-  function stopChromeWorkaround() {
-    if (chromeResumeInterval) { clearInterval(chromeResumeInterval); chromeResumeInterval = null; }
-  }
+  // Chrome resume is now handled by polling in speak()
 
   // ═══ ESCAPE KEY TO CLOSE PANEL ═══
   document.addEventListener('keydown', function(e) {
@@ -764,7 +816,7 @@
   // ═══ PAGE UNLOAD CLEANUP ═══
   window.addEventListener('beforeunload', function() {
     speechSynthesis.cancel();
-    stopChromeWorkaround();
+
   });
 
   // ═══ INIT ═══
