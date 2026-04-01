@@ -7,6 +7,24 @@
 (function() {
   'use strict';
 
+  // ═══ AVAILABILITY CHECK ═══
+  if (!('speechSynthesis' in window)) {
+    // Browser doesn't support speech synthesis — disable narrator silently
+    window.narratorTogglePanel = function() {
+      if (typeof showToast === 'function') {
+        showToast('Narrator not supported in this browser');
+      }
+    };
+    window.narratorPlayPage = window.narratorPlayBook = window.narratorPause = function() {};
+    window.narratorStop = window.narratorNext = window.narratorPrev = function() {};
+    window.narratorSpeedChange = window.narratorPitchChange = function() {};
+    window.narratorLoopChange = window.narratorSleepChange = function() {};
+    window.narratorKaraokeToggle = window.narratorAutoScrollToggle = function() {};
+    window.narratorDuoToggle = window.narratorVoiceChange = function() {};
+    window.narratorPopulateVoices = function() {};
+    return;
+  }
+
   // ═══ I18N ═══
   const NR_T = {
     ar: {
@@ -74,7 +92,7 @@
     mode: 'page',       // 'page' or 'book'
     cardIndex: 0,
     cards: [],
-    tabOrder: ['about','principles','anxiety','habits','home'],
+    tabOrder: ['about','principles','anxiety'],
     tabIndex: 0,
     loopCount: 0,        // 0 = no loop
     loopCurrent: 0,
@@ -100,9 +118,9 @@
     if (!voices.length) return;
 
     // Arabic voice priority
-    const arPriority = ['Majed','Maged','Google Arabic','Tarik','Lila','ar-'];
-    const enPriority = ['Samantha','Daniel','Google UK English','Google US English','en-'];
-    const frPriority = ['Thomas','Amelie','Google French','fr-'];
+    const arPriority = ['Majed','Maged','Google Arabic','Tarik','Lila'];
+    const enPriority = ['Samantha','Daniel','Google UK English','Google US English'];
+    const frPriority = ['Thomas','Amelie','Google French'];
 
     STATE.voiceAR = findBestVoice(voices, arPriority, 'ar');
     STATE.voiceEN = findBestVoice(voices, enPriority, 'en');
@@ -197,7 +215,7 @@
   }
 
   function cleanText(text) {
-    return text.replace(/\s+/g, ' ').replace(/[🔍📖🏠🔄😌📋🤔⚠️📚✨⌨️🤝💡🔗↑↓←→⬆️🌅🔥✓]/g, '').trim();
+    return text.replace(/\s+/g, ' ').replace(/[\u{1F000}-\u{1FFFF}|\u{2600}-\u{27BF}|\u{FE00}-\u{FEFF}|\u{1F900}-\u{1F9FF}|\u{200D}|\u{20E3}|\u{E0020}-\u{E007F}|↑↓←→✓☪️🇺🇸]/gu, '').trim();
   }
 
   // ═══ SPEECH ENGINE ═══
@@ -329,31 +347,43 @@
   }
 
   function readDuoTranslation(card, onEnd) {
-    // Re-extract text in secondary language
-    const origLang = getLang();
-    // Use French as duo language (could be made configurable)
     const duoLang = 'fr';
     const duoVoice = getVoiceForLang(duoLang);
+    let duoText = '';
 
-    // Get the principle data if available
+    // Try to get structured data for principles
     const principleId = card.el ? card.el.id : '';
-    const match = principleId.match(/principle-(\d+)/);
-    if (match && typeof PRINCIPLES !== 'undefined') {
-      const p = PRINCIPLES[parseInt(match[1]) - 1];
+    const pMatch = principleId.match(/principle-(\d+)/);
+    if (pMatch && typeof PRINCIPLES !== 'undefined') {
+      const p = PRINCIPLES[parseInt(pMatch[1]) - 1];
       if (p && p[duoLang]) {
-        const duoText = p[duoLang].title + '. ' + p[duoLang].desc;
-        const utt = new SpeechSynthesisUtterance(duoText);
-        utt.voice = duoVoice;
-        utt.lang = 'fr-FR';
-        utt.rate = STATE.speed;
-        utt.pitch = STATE.pitch;
-        utt.onend = onEnd;
-        utt.onerror = onEnd;
-        setTimeout(() => speechSynthesis.speak(utt), 300);
-        return;
+        duoText = p[duoLang].title + '. ' + p[duoLang].desc;
       }
     }
-    if (onEnd) onEnd();
+
+    // Try anxiety data
+    if (!duoText && card.type === 'anxiety' && typeof ANXIETY_DATA !== 'undefined') {
+      const idx = Array.from(card.el.parentNode.children).indexOf(card.el);
+      if (idx >= 0 && ANXIETY_DATA[idx] && ANXIETY_DATA[idx][duoLang]) {
+        const a = ANXIETY_DATA[idx][duoLang];
+        duoText = (a.title || '') + '. ' + (a.problem || '') + '. ' + (a.solution || '');
+      }
+    }
+
+    // Fallback: re-read the card's visible text (already in current lang, not ideal but better than nothing)
+    if (!duoText) {
+      if (onEnd) onEnd();
+      return;
+    }
+
+    const utt = new SpeechSynthesisUtterance(cleanText(duoText));
+    utt.voice = duoVoice;
+    utt.lang = 'fr-FR';
+    utt.rate = STATE.speed;
+    utt.pitch = STATE.pitch;
+    utt.onend = onEnd;
+    utt.onerror = onEnd;
+    setTimeout(() => speechSynthesis.speak(utt), 300);
   }
 
   // ═══ BOOK MODE — TAB NAVIGATION ═══
@@ -474,7 +504,7 @@
     navigator.mediaSession.metadata = new MediaMetadata({
       title: l === 'ar' ? 'جدد حياتك' : l === 'fr' ? 'Renouvelle ta Vie' : 'Renew Your Life',
       artist: l === 'ar' ? 'الشيخ محمد الغزالي' : 'Sheikh Mohammed al-Ghazali',
-      album: STATE.mode === 'book' ? (l === 'ar' ? 'الكتاب كاملاً' : l === 'fr' ? 'Livre complet' : 'Full Book') : (l === 'ar' ? getActiveTabName() : getActiveTabName()),
+      album: STATE.mode === 'book' ? (l === 'ar' ? 'الكتاب كاملاً' : l === 'fr' ? 'Livre complet' : 'Full Book') : getActiveTabName(),
     });
     navigator.mediaSession.setActionHandler('play', pauseNarrator);
     navigator.mediaSession.setActionHandler('pause', pauseNarrator);
