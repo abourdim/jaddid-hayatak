@@ -12,7 +12,9 @@
     // Browser doesn't support speech synthesis — disable narrator silently
     window.narratorTogglePanel = function() {
       if (typeof showToast === 'function') {
-        showToast('Narrator not supported in this browser');
+        var l = (typeof lang !== 'undefined') ? lang : 'en';
+        var msg = l === 'ar' ? 'الراوي غير مدعوم في هذا المتصفح' : l === 'fr' ? 'Narrateur non supporté dans ce navigateur' : 'Narrator not supported in this browser';
+        showToast(msg);
       }
     };
     window.narratorPlayPage = window.narratorPlayBook = window.narratorPause = function() {};
@@ -215,7 +217,7 @@
   }
 
   function cleanText(text) {
-    return text.replace(/\s+/g, ' ').replace(/[\u{1F000}-\u{1FFFF}|\u{2600}-\u{27BF}|\u{FE00}-\u{FEFF}|\u{1F900}-\u{1F9FF}|\u{200D}|\u{20E3}|\u{E0020}-\u{E007F}|↑↓←→✓☪️🇺🇸]/gu, '').trim();
+    return text.replace(/\s+/g, ' ').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\u{2190}-\u{21FF}\u{2700}-\u{27BF}↑↓←→✓]/gu, '').trim();
   }
 
   // ═══ SPEECH ENGINE ═══
@@ -255,7 +257,7 @@
   // ═══ KARAOKE HIGHLIGHT ═══
   function highlightWord(el, charIndex, charLength, fullText) {
     if (!el) return;
-    const word = fullText.substr(charIndex, charLength || 5);
+    const word = fullText.slice(charIndex, charIndex + (charLength || 5));
     // Find text nodes and highlight
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     let node;
@@ -330,11 +332,12 @@
   }
 
   function afterCardDone() {
+    if (!STATE.playing) return;
     // Loop mode
     if (STATE.loopCount > 0) {
       STATE.loopCurrent++;
       if (STATE.loopCurrent < STATE.loopCount) {
-        setTimeout(readCurrentCard, 300);
+        setTimeout(function() { if (STATE.playing) readCurrentCard(); }, 300);
         return;
       }
       STATE.loopCurrent = 0;
@@ -342,7 +345,7 @@
 
     STATE.cardIndex++;
     if (STATE.playing) {
-      setTimeout(readCurrentCard, 500);
+      setTimeout(function() { if (STATE.playing) readCurrentCard(); }, 500);
     }
   }
 
@@ -363,7 +366,8 @@
 
     // Try anxiety data
     if (!duoText && card.type === 'anxiety' && typeof ANXIETY_DATA !== 'undefined') {
-      const idx = Array.from(card.el.parentNode.children).indexOf(card.el);
+      const anxietyCards = Array.from(card.el.parentNode.querySelectorAll('.anxiety-card'));
+      const idx = anxietyCards.indexOf(card.el);
       if (idx >= 0 && ANXIETY_DATA[idx] && ANXIETY_DATA[idx][duoLang]) {
         const a = ANXIETY_DATA[idx][duoLang];
         duoText = (a.title || '') + '. ' + (a.problem || '') + '. ' + (a.solution || '');
@@ -426,6 +430,7 @@
     STATE.paused = false;
     updateUI();
     setupMediaSession();
+    startChromeWorkaround();
     readCurrentCard();
   }
 
@@ -438,6 +443,7 @@
     switchToTab(STATE.tabOrder[0]);
     updateUI();
     setupMediaSession();
+    startChromeWorkaround();
   }
 
   function pauseNarrator() {
@@ -460,6 +466,7 @@
     clearHighlights();
     document.querySelectorAll('.narrator-active-card').forEach(e => e.classList.remove('narrator-active-card'));
     if (STATE.sleepTimer) { clearTimeout(STATE.sleepTimer); STATE.sleepTimer = null; }
+    stopChromeWorkaround();
     updateUI();
   }
 
@@ -530,7 +537,6 @@
   // ═══ UI UPDATE ═══
   function updateUI() {
     const btn = document.getElementById('narratorMainBtn');
-    const panel = document.getElementById('narratorPanel');
     const playBtn = document.getElementById('narratorPlayPause');
 
     if (btn) {
@@ -598,7 +604,6 @@
 
   function onSleepChange(val) {
     setSleepTimer(parseInt(val));
-    const l = getLang();
     if (parseInt(val) > 0) {
       const msg = nrT().sleepSet + ' ' + val + ' ' + nrT().min;
       if (typeof showToast === 'function') showToast(msg);
@@ -668,6 +673,27 @@
     STATE.autoScroll = localStorage.getItem('jh-narrator-autoscroll') !== 'false';
     STATE.duoReading = localStorage.getItem('jh-narrator-duo') === 'true';
   }
+
+  // ═══ CHROME RESUME WORKAROUND ═══
+  // Chrome pauses speechSynthesis after ~15s. This timer resumes it.
+  let chromeResumeInterval = null;
+  function startChromeWorkaround() {
+    stopChromeWorkaround();
+    chromeResumeInterval = setInterval(function() {
+      if (STATE.playing && !STATE.paused && speechSynthesis.speaking && speechSynthesis.paused) {
+        speechSynthesis.resume();
+      }
+    }, 5000);
+  }
+  function stopChromeWorkaround() {
+    if (chromeResumeInterval) { clearInterval(chromeResumeInterval); chromeResumeInterval = null; }
+  }
+
+  // ═══ PAGE UNLOAD CLEANUP ═══
+  window.addEventListener('beforeunload', function() {
+    speechSynthesis.cancel();
+    stopChromeWorkaround();
+  });
 
   // ═══ INIT ═══
   function initNarrator() {
