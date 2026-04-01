@@ -267,14 +267,26 @@
         .replace(/\bhowever\b/gi, ', however,');
     }
 
-    // 6. Arabic: add pauses at natural connectors
+    // 6. Arabic: pronunciation hints + natural pauses
     if (l === 'ar') {
       clean = clean
-        .replace(/\bو\b/g, '، و')      // pause before و (and)
-        .replace(/\bلكن\b/g, '، لكن')  // pause before لكن (but)
-        .replace(/\bأو\b/g, '، أو')    // pause before أو (or)
-        .replace(/\bثم\b/g, '، ثم')    // pause before ثم (then)
-        .replace(/\bبل\b/g, '، بل');   // pause before بل (rather)
+        // Transliterated names → Arabic
+        .replace(/Carnegie/gi, 'كارنيجي')
+        .replace(/Dale/gi, 'ديل')
+        .replace(/Al-Azhar/gi, 'الأزهر')
+        .replace(/GitHub/gi, 'غيت هاب')
+        // Strip URLs and emails (not useful read aloud)
+        .replace(/https?:\/\/[^\s]+/g, '')
+        .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '')
+        .replace(/workshop-diy\.org/gi, '')
+        // Strip remaining Latin text that Arabic TTS can't read
+        .replace(/[a-zA-Z]{4,}/g, '')
+        // Natural pauses at connectors
+        .replace(/\bو\b/g, '، و')
+        .replace(/\bلكن\b/g, '، لكن')
+        .replace(/\bأو\b/g, '، أو')
+        .replace(/\bثم\b/g, '، ثم')
+        .replace(/\bبل\b/g, '، بل');
     }
 
     return clean.replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim();
