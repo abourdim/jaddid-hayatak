@@ -267,7 +267,8 @@
   // ═══ KARAOKE HIGHLIGHT ═══
   function highlightWord(el, charIndex, charLength, fullText) {
     if (!el) return;
-    const word = fullText.slice(charIndex, charIndex + (charLength || 5));
+    if (!charLength) return;
+    const word = fullText.slice(charIndex, charIndex + charLength);
     // Find text nodes and highlight
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     let node;
@@ -613,22 +614,15 @@
 
   // ═══ PANEL TOGGLE ═══
   function toggleNarratorPanel() {
-    // If playing and panel is closed, act as pause/resume
     const panel = document.getElementById('narratorPanel');
-    if (STATE.playing && panel && panel.classList.contains('hidden')) {
-      pauseNarrator();
-      if (typeof playSound === 'function') playSound('click');
-      return;
+    if (!panel) return;
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) {
+      updateLabels();
+      populateVoiceSelect();
+      syncCheckboxes();
     }
-    if (panel) {
-      panel.classList.toggle('hidden');
-      if (!panel.classList.contains('hidden')) {
-        updateLabels();
-        populateVoiceSelect();
-        syncCheckboxes();
-      }
-      if (typeof playSound === 'function') playSound('click');
-    }
+    if (typeof playSound === 'function') playSound('click');
   }
 
   // ═══ SYNC UI WITH STATE ═══
