@@ -110,13 +110,15 @@
   }
 
   function findBestVoice(voices, priority, langCode) {
+    // First: filter to only voices matching the language
+    const langVoices = voices.filter(v => v.lang.startsWith(langCode));
+    // Then: find best match by name preference
     for (const pref of priority) {
-      const match = voices.find(v =>
-        v.name.includes(pref) || v.lang.startsWith(langCode)
-      );
+      const match = langVoices.find(v => v.name.includes(pref));
       if (match) return match;
     }
-    return voices.find(v => v.lang.startsWith(langCode)) || voices[0];
+    // Fallback: any voice in that language
+    return langVoices[0] || voices[0];
   }
 
   function getVoiceForLang(l) {
@@ -596,21 +598,26 @@
     const l = getLang();
     const langCode = l === 'ar' ? 'ar' : l === 'fr' ? 'fr' : 'en';
     select.innerHTML = '';
-    voices.filter(v => v.lang.startsWith(langCode)).forEach((v, i) => {
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = `${v.name} (${v.lang})`;
-      select.appendChild(opt);
+    // Store the real index in the full voices array
+    const filtered = [];
+    voices.forEach((v, realIdx) => {
+      if (v.lang.startsWith(langCode)) filtered.push({ voice: v, idx: realIdx });
     });
-    // Add all voices as fallback
-    if (select.options.length === 0) {
-      voices.forEach((v, i) => {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = `${v.name} (${v.lang})`;
-        select.appendChild(opt);
+    if (filtered.length === 0) {
+      // Fallback: show all voices
+      voices.forEach((v, realIdx) => {
+        filtered.push({ voice: v, idx: realIdx });
       });
     }
+    filtered.forEach((item, i) => {
+      const opt = document.createElement('option');
+      opt.value = item.idx; // real index in full voices array
+      opt.textContent = `${item.voice.name} (${item.voice.lang})`;
+      // Mark current voice as selected
+      const currentVoice = getVoiceForLang(l);
+      if (currentVoice && item.voice.name === currentVoice.name) opt.selected = true;
+      select.appendChild(opt);
+    });
   }
 
   function onVoiceChange(val) {
