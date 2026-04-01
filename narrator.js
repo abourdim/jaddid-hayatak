@@ -138,7 +138,7 @@
       if (match) return match;
     }
     // Fallback: any voice in that language
-    return langVoices[0] || voices[0];
+    return langVoices[0] || null;
   }
 
   function getVoiceForLang(l) {
@@ -383,14 +383,16 @@
       return;
     }
 
+    let duoCalled = false;
+    function duoDone() { if (!duoCalled) { duoCalled = true; if (onEnd) onEnd(); } }
     const utt = new SpeechSynthesisUtterance(cleanText(duoText));
     utt.voice = duoVoice;
     utt.lang = 'fr-FR';
     utt.rate = STATE.speed;
     utt.pitch = STATE.pitch;
-    utt.onend = onEnd;
-    utt.onerror = onEnd;
-    setTimeout(function() { if (STATE.playing) speechSynthesis.speak(utt); else if (onEnd) onEnd(); }, 300);
+    utt.onend = duoDone;
+    utt.onerror = duoDone;
+    setTimeout(function() { if (STATE.playing) speechSynthesis.speak(utt); else duoDone(); }, 300);
   }
 
   // ═══ BOOK MODE — TAB NAVIGATION ═══
@@ -433,9 +435,11 @@
     STATE.cardIndex = 0;
     STATE.playing = true;
     STATE.paused = false;
+    closePanel();
     updateUI();
     setupMediaSession();
     startChromeWorkaround();
+    if (typeof showToast === 'function') showToast(nrT().page);
     readCurrentCard();
   }
 
@@ -444,11 +448,18 @@
     STATE.tabIndex = 0;
     STATE.playing = true;
     STATE.paused = false;
-    // Start from first tab
-    switchToTab(STATE.tabOrder[0]);
+    closePanel();
     updateUI();
     setupMediaSession();
     startChromeWorkaround();
+    if (typeof showToast === 'function') showToast(nrT().book);
+    // Start from first tab
+    switchToTab(STATE.tabOrder[0]);
+  }
+
+  function closePanel() {
+    const panel = document.getElementById('narratorPanel');
+    if (panel && !panel.classList.contains('hidden')) panel.classList.add('hidden');
   }
 
   function pauseNarrator() {
@@ -583,9 +594,33 @@
     const panel = document.getElementById('narratorPanel');
     if (panel) {
       panel.classList.toggle('hidden');
-      updateLabels();
+      if (!panel.classList.contains('hidden')) {
+        updateLabels();
+        populateVoiceSelect();
+        syncCheckboxes();
+      }
       if (typeof playSound === 'function') playSound('click');
     }
+  }
+
+  // ═══ SYNC UI WITH STATE ═══
+  function syncCheckboxes() {
+    const panel = document.getElementById('narratorPanel');
+    if (!panel) return;
+    const toggles = panel.querySelectorAll('.narrator-toggle input[type=checkbox]');
+    // Order: karaoke, autoscroll, duo
+    if (toggles[0]) toggles[0].checked = STATE.karaokeEnabled;
+    if (toggles[1]) toggles[1].checked = STATE.autoScroll;
+    if (toggles[2]) toggles[2].checked = STATE.duoReading;
+    // Sync sliders
+    const speedEl = document.getElementById('narratorSpeed');
+    if (speedEl) speedEl.value = STATE.speed;
+    const speedLabel = document.getElementById('narratorSpeedLabel');
+    if (speedLabel) speedLabel.textContent = STATE.speed + 'x';
+    const pitchEl = document.getElementById('narratorPitch');
+    if (pitchEl) pitchEl.value = STATE.pitch;
+    const pitchLabel = document.getElementById('narratorPitchLabel');
+    if (pitchLabel) pitchLabel.textContent = STATE.pitch.toFixed(1);
   }
 
   // ═══ SETTINGS HANDLERS ═══
@@ -692,6 +727,17 @@
   function stopChromeWorkaround() {
     if (chromeResumeInterval) { clearInterval(chromeResumeInterval); chromeResumeInterval = null; }
   }
+
+  // ═══ ESCAPE KEY TO CLOSE PANEL ═══
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var panel = document.getElementById('narratorPanel');
+      if (panel && !panel.classList.contains('hidden')) {
+        panel.classList.add('hidden');
+        e.stopPropagation();
+      }
+    }
+  });
 
   // ═══ PAGE UNLOAD CLEANUP ═══
   window.addEventListener('beforeunload', function() {
