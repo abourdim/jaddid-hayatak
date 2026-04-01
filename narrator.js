@@ -220,9 +220,23 @@
   }
 
   function cleanText(text) {
+    // 1. Strip emojis and special chars
     var clean = text.replace(/\s+/g, ' ').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\u{2190}-\u{21FF}↑↓←→✓]/gu, '').trim();
-    // Pronunciation hints for French/English TTS
+
+    // 2. Remove filler chars that make TTS stumble
+    clean = clean.replace(/[«»""()[\]{}—–•●◆■▪]/g, ' ').replace(/\s+/g, ' ');
+
+    // 3. Add breathing pauses at natural break points (all languages)
+    clean = clean
+      .replace(/:\s/g, ':, ')           // pause after colons
+      .replace(/;\s/g, ';, ')           // pause after semicolons
+      .replace(/\s—\s/g, ', ')          // dash → pause
+      .replace(/\.\.\./g, ', ')         // ellipsis → pause
+      .replace(/\s*\n\s*/g, '. ');      // newlines → sentence break
+
     var l = getLang();
+
+    // 4. French pronunciation + natural pacing
     if (l === 'fr') {
       clean = clean
         .replace(/al-Ghazali/gi, 'al Razali')
@@ -232,13 +246,38 @@
         .replace(/Carnegie/gi, 'Carnégi')
         .replace(/Al-Azhar/gi, 'al Azar')
         .replace(/Faisal/gi, 'Faycal')
-        .replace(/Nasih Ulwan/gi, 'Nassih Oulwane');
-    } else if (l === 'en') {
+        .replace(/Nasih Ulwan/gi, 'Nassih Oulwane')
+        .replace(/Jaddid Hayatak/gi, 'Djaddid Hayatak')
+        .replace(/\bet\b/g, ', et')     // breathing pause before "et"
+        .replace(/\bmais\b/g, ', mais') // breathing pause before "mais"
+        .replace(/\bou\b/g, ', ou')     // breathing pause before "ou"
+        .replace(/\bcar\b/g, ', car')   // breathing pause before "car"
+        .replace(/\bdonc\b/g, ', donc');// breathing pause before "donc"
+    }
+
+    // 5. English pronunciation + natural pacing
+    if (l === 'en') {
       clean = clean
         .replace(/al-Ghazali/gi, 'al Gah-zah-lee')
-        .replace(/Ghazali/gi, 'Gah-zah-lee');
+        .replace(/Ghazali/gi, 'Gah-zah-lee')
+        .replace(/Jaddid Hayatak/gi, 'Jaddeed Hayaatak')
+        .replace(/\band\b/g, ', and')
+        .replace(/\bbut\b/g, ', but')
+        .replace(/\bor\b/g, ', or')
+        .replace(/\bhowever\b/gi, ', however,');
     }
-    return clean;
+
+    // 6. Arabic: add pauses at natural connectors
+    if (l === 'ar') {
+      clean = clean
+        .replace(/\bو\b/g, '، و')      // pause before و (and)
+        .replace(/\bلكن\b/g, '، لكن')  // pause before لكن (but)
+        .replace(/\bأو\b/g, '، أو')    // pause before أو (or)
+        .replace(/\bثم\b/g, '، ثم')    // pause before ثم (then)
+        .replace(/\bبل\b/g, '، بل');   // pause before بل (rather)
+    }
+
+    return clean.replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim();
   }
 
   // ═══ SPEECH ENGINE ═══
@@ -259,7 +298,7 @@
     var utt = new SpeechSynthesisUtterance(text);
     utt.voice = getVoiceForLang(l);
     utt.lang = l === 'ar' ? 'ar-SA' : l === 'fr' ? 'fr-FR' : 'en-US';
-    utt.rate = STATE.speed;
+    utt.rate = (l === 'ar') ? STATE.speed * 0.9 : STATE.speed;
     utt.pitch = STATE.pitch;
 
     // Karaoke
@@ -855,7 +894,7 @@
     var utt = new SpeechSynthesisUtterance(text);
     utt.voice = getVoiceForLang(l);
     utt.lang = l === 'ar' ? 'ar-SA' : l === 'fr' ? 'fr-FR' : 'en-US';
-    utt.rate = STATE.speed;
+    utt.rate = (l === 'ar') ? STATE.speed * 0.9 : STATE.speed;
     utt.pitch = STATE.pitch;
 
     var done = false;
