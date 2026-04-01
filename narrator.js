@@ -100,6 +100,7 @@
     loopCurrent: 0,
     sleepTimer: null,
     sleepMinutes: 0,
+    duoTimeout: null,
     karaokeEnabled: true,
     autoScroll: true,
     duoReading: false,
@@ -148,7 +149,7 @@
   }
 
   // Load voices (some browsers load async)
-  speechSynthesis.onvoiceschanged = loadVoices;
+  speechSynthesis.addEventListener('voiceschanged', loadVoices);
   loadVoices();
 
   // ═══ CARD EXTRACTION ═══
@@ -221,7 +222,11 @@
   }
 
   // ═══ SPEECH ENGINE ═══
+  let speakGen = 0; // generation counter to suppress stale callbacks
+
   function speak(text, onEnd) {
+    speakGen++;
+    const myGen = speakGen;
     speechSynthesis.cancel();
     // Guard: empty text — skip to next
     if (!text || !text.trim()) {
@@ -238,7 +243,8 @@
     // Karaoke: word boundary events
     if (STATE.karaokeEnabled) {
       utt.onboundary = function(e) {
-        if (e.name === 'word' && STATE.cards[STATE.cardIndex]) {
+        if (myGen !== speakGen) return; // stale
+        if (e.name === 'word' && e.charLength > 0 && STATE.cards[STATE.cardIndex]) {
           highlightWord(STATE.cards[STATE.cardIndex].el, e.charIndex, e.charLength, text);
         }
       };
@@ -246,10 +252,12 @@
 
     utt.onend = function() {
       clearHighlights();
+      if (myGen !== speakGen) return; // stale callback from cancelled utterance
       if (onEnd) onEnd();
     };
     utt.onerror = function() {
       clearHighlights();
+      if (myGen !== speakGen) return; // stale
       if (onEnd) onEnd();
     };
 
@@ -384,7 +392,7 @@
     }
 
     let duoCalled = false;
-    function duoDone() { if (!duoCalled) { duoCalled = true; if (onEnd) onEnd(); } }
+    function duoDone() { if (!duoCalled) { duoCalled = true; STATE.duoTimeout = null; if (onEnd) onEnd(); } }
     const utt = new SpeechSynthesisUtterance(cleanText(duoText));
     utt.voice = duoVoice;
     utt.lang = 'fr-FR';
@@ -392,7 +400,7 @@
     utt.pitch = STATE.pitch;
     utt.onend = duoDone;
     utt.onerror = duoDone;
-    setTimeout(function() { if (STATE.playing) speechSynthesis.speak(utt); else duoDone(); }, 300);
+    STATE.duoTimeout = setTimeout(function() { if (STATE.playing) speechSynthesis.speak(utt); else duoDone(); }, 300);
   }
 
   // ═══ BOOK MODE — TAB NAVIGATION ═══
@@ -466,15 +474,23 @@
     if (STATE.playing && !STATE.paused) {
       speechSynthesis.pause();
       STATE.paused = true;
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
       updateUI();
     } else if (STATE.paused) {
       speechSynthesis.resume();
       STATE.paused = false;
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
       updateUI();
     }
   }
 
+  function cancelDuo() {
+    if (STATE.duoTimeout) { clearTimeout(STATE.duoTimeout); STATE.duoTimeout = null; }
+  }
+
   function stopNarrator() {
+    speakGen++; // invalidate all pending callbacks
+    cancelDuo();
     speechSynthesis.cancel();
     STATE.playing = false;
     STATE.paused = false;
@@ -483,11 +499,14 @@
     document.querySelectorAll('.narrator-active-card').forEach(e => e.classList.remove('narrator-active-card'));
     if (STATE.sleepTimer) { clearTimeout(STATE.sleepTimer); STATE.sleepTimer = null; }
     stopChromeWorkaround();
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
     updateUI();
   }
 
   function nextCard() {
     if (!STATE.playing) return;
+    speakGen++;
+    cancelDuo();
     speechSynthesis.cancel();
     clearHighlights();
     STATE.loopCurrent = 0;
@@ -501,6 +520,8 @@
 
   function prevCard() {
     if (!STATE.playing) return;
+    speakGen++;
+    cancelDuo();
     speechSynthesis.cancel();
     clearHighlights();
     STATE.loopCurrent = 0;
@@ -529,6 +550,7 @@
       artist: l === 'ar' ? 'الشيخ محمد الغزالي' : 'Sheikh Mohammed al-Ghazali',
       album: STATE.mode === 'book' ? (l === 'ar' ? 'الكتاب كاملاً' : l === 'fr' ? 'Livre complet' : 'Full Book') : getActiveTabName(),
     });
+    navigator.mediaSession.playbackState = 'playing';
     navigator.mediaSession.setActionHandler('play', pauseNarrator);
     navigator.mediaSession.setActionHandler('pause', pauseNarrator);
     navigator.mediaSession.setActionHandler('nexttrack', nextCard);
@@ -591,7 +613,13 @@
 
   // ═══ PANEL TOGGLE ═══
   function toggleNarratorPanel() {
+    // If playing and panel is closed, act as pause/resume
     const panel = document.getElementById('narratorPanel');
+    if (STATE.playing && panel && panel.classList.contains('hidden')) {
+      pauseNarrator();
+      if (typeof playSound === 'function') playSound('click');
+      return;
+    }
     if (panel) {
       panel.classList.toggle('hidden');
       if (!panel.classList.contains('hidden')) {
