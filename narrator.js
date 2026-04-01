@@ -823,15 +823,142 @@
   function initNarrator() {
     loadSettings();
     updateLabels();
+    setTimeout(injectSpeakButtons, 500);
     // Repopulate voices and labels when language changes
     const origSetLang = window.setLang;
     if (origSetLang) {
       window.setLang = function(l) {
         origSetLang(l);
-        setTimeout(() => { populateVoiceSelect(); updateLabels(); }, 100);
+        setTimeout(() => { populateVoiceSelect(); updateLabels(); injectSpeakButtons(); }, 100);
         if (STATE.playing) stopNarrator();
       };
     }
+  }
+
+  // ═══ READ SINGLE SECTION ═══
+  var sectionSpeaking = false;
+
+  function speakSection(el) {
+    // Stop any ongoing narrator or section read
+    if (STATE.playing) stopNarrator();
+    speakGen++;
+    speechSynthesis.cancel();
+
+    var text = cleanText(el.textContent || '');
+    if (!text) return;
+
+    sectionSpeaking = true;
+    // Highlight the card
+    el.classList.add('narrator-active-card');
+
+    var l = getLang();
+    var utt = new SpeechSynthesisUtterance(text);
+    utt.voice = getVoiceForLang(l);
+    utt.lang = l === 'ar' ? 'ar-SA' : l === 'fr' ? 'fr-FR' : 'en-US';
+    utt.rate = STATE.speed;
+    utt.pitch = STATE.pitch;
+
+    var done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      sectionSpeaking = false;
+      el.classList.remove('narrator-active-card');
+      clearHighlights();
+    }
+
+    utt.onend = finish;
+    utt.onerror = finish;
+
+    // Karaoke
+    if (STATE.karaokeEnabled) {
+      utt.onboundary = function(e) {
+        if (e.name === 'word' && e.charLength > 0) {
+          highlightWord(el, e.charIndex, e.charLength, text);
+        }
+      };
+    }
+
+    speechSynthesis.speak(utt);
+
+    // Poll fallback
+    var pollStarted = false;
+    var pollInterval = setInterval(function() {
+      if (done) { clearInterval(pollInterval); return; }
+      if (speechSynthesis.speaking) pollStarted = true;
+      if (pollStarted && speechSynthesis.paused) speechSynthesis.resume();
+      if (pollStarted && !speechSynthesis.speaking && !speechSynthesis.pending) {
+        clearInterval(pollInterval);
+        finish();
+      }
+    }, 500);
+
+    // Hard fallback
+    setTimeout(function() {
+      if (!done) { clearInterval(pollInterval); finish(); }
+    }, Math.max(5000, (text.length / 3) * (1000 / STATE.speed)) + 3000);
+  }
+
+  function stopSection() {
+    if (sectionSpeaking) {
+      speechSynthesis.cancel();
+      sectionSpeaking = false;
+      document.querySelectorAll('.narrator-active-card').forEach(function(e) { e.classList.remove('narrator-active-card'); });
+      clearHighlights();
+    }
+  }
+
+  // ═══ INJECT 🔊 BUTTONS INTO CARDS ═══
+  function injectSpeakButtons() {
+    // Remove old buttons first
+    document.querySelectorAll('.narrator-speak-btn').forEach(function(b) { b.remove(); });
+
+    var selectors = [
+      '.about-disclaimer', '.about-author', '.about-section',
+      '.principle-card', '.anxiety-card', '.habit-item', '.daily-card'
+    ];
+    selectors.forEach(function(sel) {
+      document.querySelectorAll(sel).forEach(function(card) {
+        // Skip if already has button
+        if (card.querySelector('.narrator-speak-btn')) return;
+        var btn = document.createElement('button');
+        btn.className = 'narrator-speak-btn';
+        btn.textContent = '🔊';
+        btn.title = nrT().page;
+        btn.onclick = function(e) {
+          e.stopPropagation();
+          if (sectionSpeaking) {
+            stopSection();
+          } else {
+            speakSection(card);
+          }
+        };
+        card.style.position = 'relative';
+        card.appendChild(btn);
+      });
+    });
+  }
+
+  // Re-inject after renders
+  var origRenderAbout = window.renderAbout;
+  if (origRenderAbout) {
+    window.renderAbout = function() { origRenderAbout(); setTimeout(injectSpeakButtons, 100); };
+  }
+  var origRenderPrinciples = window.renderPrinciples;
+  if (origRenderPrinciples) {
+    window.renderPrinciples = function() { origRenderPrinciples(); setTimeout(injectSpeakButtons, 100); };
+  }
+  var origRenderAnxiety = window.renderAnxiety;
+  if (origRenderAnxiety) {
+    window.renderAnxiety = function() { origRenderAnxiety(); setTimeout(injectSpeakButtons, 100); };
+  }
+  var origRenderHabits = window.renderHabits;
+  if (origRenderHabits) {
+    window.renderHabits = function() { origRenderHabits(); setTimeout(injectSpeakButtons, 100); };
+  }
+  var origRenderHome = window.renderHome;
+  if (origRenderHome) {
+    window.renderHome = function() { origRenderHome(); setTimeout(injectSpeakButtons, 100); };
   }
 
   // ═══ EXPOSE GLOBALS ═══

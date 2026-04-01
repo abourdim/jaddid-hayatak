@@ -455,3 +455,8 @@ body.reading-mode .reading-exit{position:fixed;top:16px;right:16px;z-index:9999;
 
 /* Active card glow */
 .narrator-active-card{outline:2px solid var(--primary);outline-offset:2px;border-radius:var(--rr);transition:outline .3s;box-shadow:0 0 20px rgba(232,160,64,.15)}
+
+/* Per-card speak button */
+.narrator-speak-btn{position:absolute;top:8px;left:8px;width:28px;height:28px;border:none;background:rgba(232,160,64,.1);border-radius:50%;cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;opacity:.4;transition:.2s;z-index:2}
+[dir="rtl"] .narrator-speak-btn{left:auto;right:8px}
+.narrator-speak-btn:hover{opacity:1;background:rgba(232,160,64,.25);transform:scale(1.15)}
