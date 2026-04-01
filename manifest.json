@@ -1,0 +1,12 @@
+{
+  "name": "Renew Your Life — جدد حياتك",
+  "short_name": "جدد حياتك",
+  "description": "Interactive trilingual app based on Sheikh Mohammed al-Ghazali's book",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#FF8C61",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": []
+}
