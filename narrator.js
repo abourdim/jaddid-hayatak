@@ -217,14 +217,17 @@
   }
 
   function cleanText(text) {
-    return text.replace(/\s+/g, ' ').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\u{2190}-\u{21FF}\u{2700}-\u{27BF}↑↓←→✓]/gu, '').trim();
+    return text.replace(/\s+/g, ' ').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\u{2190}-\u{21FF}↑↓←→✓]/gu, '').trim();
   }
 
   // ═══ SPEECH ENGINE ═══
-  let currentUtterance = null;
-
   function speak(text, onEnd) {
     speechSynthesis.cancel();
+    // Guard: empty text — skip to next
+    if (!text || !text.trim()) {
+      if (onEnd) onEnd();
+      return;
+    }
     const l = getLang();
     const utt = new SpeechSynthesisUtterance(text);
     utt.voice = getVoiceForLang(l);
@@ -250,7 +253,6 @@
       if (onEnd) onEnd();
     };
 
-    currentUtterance = utt;
     speechSynthesis.speak(utt);
   }
 
@@ -320,6 +322,7 @@
     updateProgress();
 
     speak(card.text, function() {
+      if (!STATE.playing) return;
       // Duo reading: read translation after Arabic
       if (STATE.duoReading && getLang() === 'ar') {
         readDuoTranslation(card, function() {
@@ -387,7 +390,7 @@
     utt.pitch = STATE.pitch;
     utt.onend = onEnd;
     utt.onerror = onEnd;
-    setTimeout(() => speechSynthesis.speak(utt), 300);
+    setTimeout(function() { if (STATE.playing) speechSynthesis.speak(utt); else if (onEnd) onEnd(); }, 300);
   }
 
   // ═══ BOOK MODE — TAB NAVIGATION ═══
@@ -405,14 +408,16 @@
     const tabBtn = document.querySelector(`.tab[data-tab="${tabName}"]`);
     if (tabBtn) {
       tabBtn.click();
-      setTimeout(() => {
+      setTimeout(function() {
+        if (!STATE.playing) return;
         STATE.cards = extractCards(getActivePanel());
         STATE.cardIndex = 0;
         // Announce chapter name
         const title = getActivePanel().querySelector('.section-title');
         if (title) {
           speak(title.textContent, function() {
-            setTimeout(readCurrentCard, 300);
+            if (!STATE.playing) return;
+            setTimeout(function() { if (STATE.playing) readCurrentCard(); }, 300);
           });
         } else {
           readCurrentCard();
@@ -644,12 +649,11 @@
         filtered.push({ voice: v, idx: realIdx });
       });
     }
-    filtered.forEach((item, i) => {
+    const currentVoice = getVoiceForLang(l);
+    filtered.forEach(function(item) {
       const opt = document.createElement('option');
       opt.value = item.idx; // real index in full voices array
       opt.textContent = `${item.voice.name} (${item.voice.lang})`;
-      // Mark current voice as selected
-      const currentVoice = getVoiceForLang(l);
       if (currentVoice && item.voice.name === currentVoice.name) opt.selected = true;
       select.appendChild(opt);
     });
@@ -667,8 +671,8 @@
 
   // ═══ LOAD SAVED SETTINGS ═══
   function loadSettings() {
-    STATE.speed = parseFloat(localStorage.getItem('jh-narrator-speed') || '1');
-    STATE.pitch = parseFloat(localStorage.getItem('jh-narrator-pitch') || '1');
+    STATE.speed = parseFloat(localStorage.getItem('jh-narrator-speed')) || 1;
+    STATE.pitch = parseFloat(localStorage.getItem('jh-narrator-pitch')) || 1;
     STATE.karaokeEnabled = localStorage.getItem('jh-narrator-karaoke') !== 'false';
     STATE.autoScroll = localStorage.getItem('jh-narrator-autoscroll') !== 'false';
     STATE.duoReading = localStorage.getItem('jh-narrator-duo') === 'true';
