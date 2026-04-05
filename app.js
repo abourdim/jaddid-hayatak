@@ -499,7 +499,7 @@ function renderHome() {
   const dayIdx = new Date().getDate() % PRINCIPLES.length;
   const p = PRINCIPLES[dayIdx];
   const pd = p[lang];
-  document.getElementById('dailyCard').innerHTML = `
+  (document.getElementById('dailyCard')||{}).innerHTML= `
     <div class="daily-label">${t.dailyLabel}</div>
     <div class="daily-title">${pd.title}</div>
     <div class="daily-body">${pd.desc}</div>
@@ -512,7 +512,7 @@ function renderHome() {
     {icon:'🤔',tab:'quiz',title:t.tabQuiz,desc:lang==='ar'?'اختبر نفسك':lang==='fr'?'Testez-vous':'Test yourself'},
     {icon:'📖',tab:'about',title:t.tabAbout,desc:lang==='ar'?'عن الكتاب والمؤلف':lang==='fr'?'Le livre et l\'auteur':'Book & author'},
   ];
-  document.getElementById('homeGrid').innerHTML = sections.map(s => `
+  (document.getElementById('homeGrid')||{}).innerHTML= sections.map(s => `
     <div class="home-card" onclick="document.querySelector('[data-tab=${s.tab}]').click()">
       <span class="hc-icon">${s.icon}</span>
       <div class="hc-title">${s.title}</div>
@@ -559,7 +559,7 @@ function renderPrinciples() {
       </div>
     </div>`;
   }).join('');
-  document.getElementById('principlesContainer').innerHTML = searchBar + cards;
+  (document.getElementById('principlesContainer')||{}).innerHTML= searchBar + cards;
 }
 
 function filterPrinciples(query) {
@@ -595,7 +595,7 @@ async function sharePrinciple(idx) {
 // ═══════════════ RENDER: ANXIETY ═══════════════
 function renderAnxiety() {
   const t = T[lang];
-  document.getElementById('anxietyContainer').innerHTML = ANXIETY_DATA.map(a => {
+  (document.getElementById('anxietyContainer')||{}).innerHTML= ANXIETY_DATA.map(a => {
     const d = a[lang];
     return `
     <div class="anxiety-card scroll-reveal">
@@ -864,7 +864,7 @@ function renderAbout() {
     }
   };
   const a = about[lang];
-  document.getElementById('aboutContainer').innerHTML = `
+  (document.getElementById('aboutContainer')||{}).innerHTML= `
     <div class="about-disclaimer">
       <div class="about-disclaimer-title">${a.disclaimerTitle}</div>
       <p>${a.disclaimer}</p>
@@ -916,7 +916,7 @@ function renderHelp() {
       {title:'🤝 Contribuer',body:'GitHub : github.com/abourdim/jaddid-hayatak'},
     ]
   };
-  document.getElementById('helpBody').innerHTML = help[lang].map(h => `
+  (document.getElementById('helpBody')||{}).innerHTML= help[lang].map(h => `
     <div class="help-item">
       <div class="help-item-title">${h.title}</div>
       <div>${h.body}</div>
@@ -926,7 +926,7 @@ function renderHelp() {
 
 // ═══════════════ RENDER: DUAS ═══════════════
 function renderDuas() {
-  document.getElementById('duaPanelContent').innerHTML = DUAS.map(d => {
+  (document.getElementById('duaPanelContent')||{}).innerHTML= DUAS.map(d => {
     const dd = d[lang];
     return `
     <div class="dua-item">
