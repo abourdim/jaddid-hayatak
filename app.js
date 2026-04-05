@@ -412,10 +412,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function initSplash() {
   let count = 5;
   const el = document.getElementById('splashCount');
-  if (!el) return;
   // Render splash features
   const featuresEl = document.getElementById('splashFeatures');
-  if (!featuresEl) return;
   if (featuresEl) {
     const features = T[lang].splashFeatures;
     featuresEl.innerHTML = features.map((f, i) =>
@@ -430,7 +428,6 @@ function initSplash() {
 }
 function dismissSplash() {
   const s = document.getElementById('splash');
-  if (!s) return;
   if (s) { s.classList.add('hidden'); setTimeout(() => s.style.display = 'none', 500); }
   playSound('click');
 }
@@ -458,7 +455,6 @@ function setLang(l) {
   renderHome(); renderPrinciples(); renderAnxiety(); renderHabits(); renderQuiz(); renderAbout(); renderHelp(); renderDuas();
   // Update splash features if visible
   const featuresEl = document.getElementById('splashFeatures');
-  if (!featuresEl) return;
   if (featuresEl) {
     featuresEl.innerHTML = T[l].splashFeatures.map((f, i) =>
       `<div class="splash-feature" style="animation-delay:${0.3 + i * 0.3}s">${f}</div>`
@@ -473,7 +469,6 @@ function setTheme(t) {
   localStorage.setItem('jh-theme', t);
   const idx = themes.indexOf(t);
   const el = document.getElementById('themeIcon');
-  if (!el) return;
   if (el) el.textContent = themeIcons[idx];
 }
 function cycleTheme() {
@@ -637,7 +632,6 @@ function renderHabits() {
   const streak = getStreak();
   const streakHTML = streak > 0 ? `<div class="streak-badge">🔥 ${streak} ${T[lang].streakMsg}</div>` : '';
   const container = document.getElementById('habitsContainer');
-  if (!container) return;
   container.innerHTML = HABITS.map((h, i) => {
     const d = h[lang];
     const isDone = habitsState.done.includes(i);
@@ -653,7 +647,6 @@ function renderHabits() {
   }).join('');
   // Insert streak before container
   const streakEl = document.getElementById('streakBadge');
-  if (!streakEl) return;
   if (streakEl) streakEl.innerHTML = streakHTML;
   updateHabitsProgress(habitsState);
 }
@@ -685,9 +678,7 @@ function updateHabitsProgress(hs) {
   const total = HABITS.length;
   const pct = total > 0 ? (done / total * 100) : 0;
   const fill = document.getElementById('habitsFill');
-  if (!fill) return;
   const txt = document.getElementById('habitsText');
-  if (!txt) return;
   if (fill) fill.style.width = pct + '%';
   if (txt) txt.textContent = `${done}/${total}`;
 }
@@ -721,7 +712,6 @@ function getStreak() {
 // ═══════════════ CONFETTI ANIMATION ═══════════════
 function launchConfetti() {
   const canvas = document.getElementById('confettiCanvas');
-  if (!canvas) return;
   canvas.style.display = 'block';
   const ctx = canvas.getContext('2d');
   canvas.width = window.innerWidth;
@@ -770,7 +760,6 @@ function launchConfetti() {
 function renderQuiz() {
   const t = T[lang];
   const container = document.getElementById('quizContainer');
-  if (!container) return;
   container.innerHTML = QUIZ.map((q, i) => `
     <div class="quiz-question scroll-reveal" id="quiz-q-${i}">
       <div class="quiz-q-text">${i+1}. ${q[lang]}</div>
@@ -821,7 +810,6 @@ function submitQuiz() {
     desc = lang==='ar'?'حياتك بحاجة لتجديد حقيقي. ابدأ بمبدأ واحد من القائمة وطبّقه هذا الأسبوع.':lang==='fr'?'Votre vie a besoin d\'un vrai renouveau. Commencez par un principe cette semaine.':'Your life needs real renewal. Start with one principle this week.';
   }
   const result = document.getElementById('quizResult');
-  if (!result) return;
   result.classList.remove('hidden');
   result.innerHTML = `
     <div class="qr-emoji">${emoji}</div>
@@ -977,10 +965,8 @@ function initKeyboardNav() {
     // Escape closes panels
     if (e.key === 'Escape') {
       const helpPanel = document.getElementById('helpPanel');
-      if (!helpPanel) return;
       if (!helpPanel.classList.contains('hidden')) { toggleHelp(); return; }
       const duaPanel = document.getElementById('duaPanel');
-      if (!duaPanel) return;
       if (!duaPanel.classList.contains('hidden')) { toggleDuaPanel(); return; }
       // Close any open principle
       document.querySelectorAll('.principle-card.open').forEach(c => c.classList.remove('open'));
@@ -988,7 +974,6 @@ function initKeyboardNav() {
     // Arrow keys for principles navigation
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       const principlesPanel = document.getElementById('panel-principles');
-      if (!principlesPanel) return;
       if (!principlesPanel || !principlesPanel.classList.contains('active')) return;
       // Don't navigate if search is focused
       if (document.activeElement && document.activeElement.id === 'principlesSearch') return;
@@ -1024,14 +1009,11 @@ function toggleDuaPanel() {
 }
 function showToast(msg) {
   const t = document.getElementById('toast');
-  if (!t) return;
   const m = document.getElementById('toastMsg');
-  if (!m) return;
   if (t && m) { m.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 2500); }
 }
 function initScrollTop() {
   const btn = document.getElementById('scrollTop');
-  if (!btn) return;
   window.addEventListener('scroll', () => {
     if (btn) btn.classList.toggle('visible', window.scrollY > 300);
   });
@@ -1345,7 +1327,6 @@ function checkEasterEgg() {
   const answers = window._quizAnswers || {};
   if (Object.keys(answers).length >= QUIZ.length) {
     const result = document.getElementById('quizResult');
-    if (!result) return;
     if (result && !result.classList.contains('hidden')) {
       // Check if score >= 75%
       const invertedQs = [1, 3];
