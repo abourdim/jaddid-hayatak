@@ -632,6 +632,7 @@ function renderHabits() {
   const streak = getStreak();
   const streakHTML = streak > 0 ? `<div class="streak-badge">🔥 ${streak} ${T[lang].streakMsg}</div>` : '';
   const container = document.getElementById('habitsContainer');
+  if (!container) return;
   container.innerHTML = HABITS.map((h, i) => {
     const d = h[lang];
     const isDone = habitsState.done.includes(i);
@@ -760,6 +761,7 @@ function launchConfetti() {
 function renderQuiz() {
   const t = T[lang];
   const container = document.getElementById('quizContainer');
+  if (!container) return;
   container.innerHTML = QUIZ.map((q, i) => `
     <div class="quiz-question scroll-reveal" id="quiz-q-${i}">
       <div class="quiz-q-text">${i+1}. ${q[lang]}</div>
